@@ -1,101 +1,146 @@
 # Bug Report
 
-## 1. Pagination is broken for page 1
+This document records the bugs identified during the quality audit and testing of the Task API codebase.
 
-### Expected behavior
-Calling `getPaginated(1, 10)` should return the first 10 items (items 0 to 9).
+---
 
-### Actual behavior
-Calling `getPaginated(1, 10)` returns items 10 to 19 because the offset is calculated as `page * limit` (`1 * 10 = 10`) instead of `(page - 1) * limit`.
+## 1. Pagination Offset Calculation Bug (FIXED & VERIFIED)
 
-### Location
-`src/services/taskService.js`
-`getPaginated()`
+### 1. Title
+Pagination skips page 1 results due to zero-indexing/one-indexing offset formula mismatch.
 
-### How it was discovered
-The unit test `TaskService › getPaginated() › should return correct paginated tasks` and integration test `Task API Routes › GET /tasks › should paginate tasks` exposed the problem. When requesting 10 items for page 1, only 5 items were returned (because 15 items total were created, and it sliced from index 10 to 20).
+### 2. Location & Function
+- **Location:** `src/services/taskService.js`
+- **Function:** `getPaginated(page, limit)`
 
-### Root cause
-The formula for pagination offset in 1-indexed pages is incorrect. `const offset = page * limit;` skips the first page entirely if `page` is passed as `1`.
+### 3. Expected Behavior
+Requesting page 1 (`page=1`, `limit=10`) should return the first 10 items (items at index 0 through 9). Requesting page 2 (`page=2`, `limit=10`) should return items at index 10 through 19.
 
-### Suggested fix
-Change the offset calculation to:
+### 4. Actual Behavior
+Requesting `page=1` with `limit=10` returned items starting from index 10 (page 2 items), skipping the first 10 tasks entirely.
+
+### 5. How the Test Exposed It
+Unit tests (`taskService.test.js`) creating 15 sample tasks expected `getPaginated(1, 10)[0].title` to be `'T1'`. Instead, it returned `'T11'`, indicating offset calculation skipped index 0.
+
+### 6. Root Cause
+The API treats page numbers as **1-indexed** (page 1 is the first page). However, `getPaginated()` calculated:
 ```javascript
-const offset = (page - 1) * limit;
+const offset = page * limit;
 ```
+For `page = 1` and `limit = 10`, `offset` evaluated to `1 * 10 = 10`, which skipped index 0 through 9.
+
+### 7. Resolution & Implemented Fix
+- **Original Code:**
+  ```javascript
+  const offset = page * limit;
+  ```
+- **Corrected Implementation:**
+  ```javascript
+  const offset = (page - 1) * limit;
+  ```
+- **Status:** **Fixed**
+- **Verification:**
+  - Added unit regression tests in `tests/taskService.test.js` validating page 1 (`T1`–`T10`) and page 2 (`T11`–`T15`).
+  - Added integration regression tests in `tests/tasks.routes.test.js` for `GET /tasks?page=1&limit=10` and `GET /tasks?page=2&limit=10`.
+  - Manually verified against the live Render deployment (`https://full-stack-development-internship-klyj.onrender.com/tasks?page=1&limit=10`).
 
 ---
 
-## 2. Completing a task overwrites priority
+## 2. Completing a Task Overwrites Priority (IDENTIFIED)
 
-### Expected behavior
-Completing a task should only update its status to `done` and populate `completedAt`. It should not modify its priority.
+### 1. Title
+`completeTask()` unconditionally overwrites task priority to `'medium'`.
 
-### Actual behavior
-Completing a task always hardcodes its priority to `medium`, wiping out whatever priority (e.g. `high` or `low`) was set before.
+### 2. Location & Function
+- **Location:** `src/services/taskService.js`
+- **Function:** `completeTask(id)`
 
-### Location
-`src/services/taskService.js`
-`completeTask()`
+### 3. Expected Behavior
+Completing a task (`PATCH /tasks/:id/complete`) should update `status` to `'done'` and set `completedAt` timestamp without altering original priority (`'high'`, `'low'`, etc.).
 
-### How it was discovered
-The unit test `TaskService › completeTask() › should complete an existing task` failed because the returned task had a `medium` priority instead of the original `high` priority.
+### 4. Actual Behavior
+Completing a task hardcodes `priority: 'medium'` into the updated task object, wiping out whatever priority was previously set.
 
-### Root cause
-In `completeTask()`, the updated object explicitly sets `priority: 'medium'` regardless of the current task's priority.
+### 5. How the Test Exposed It
+A task created with `priority: 'high'` returned `priority: 'medium'` after calling `completeTask()`.
 
-### Suggested fix
-Remove `priority: 'medium',` from the `updated` object construction in `completeTask()`.
+### 6. Root Cause
+In `completeTask()`, the construction of the updated task object explicitly included `priority: 'medium'`.
+
+### 7. Suggested Fix
+Remove `priority: 'medium'` from `completeTask()` so that `...task` preserves the original priority:
+```javascript
+const updated = {
+  ...task,
+  status: 'done',
+  completedAt: new Date().toISOString(),
+};
+```
+- **Status:** **Identified & Documented**
 
 ---
 
-## 3. Status filtering allows partial matches
+## 3. Status Filtering Allows Partial Matches (IDENTIFIED)
 
-### Expected behavior
-Filtering tasks by status (e.g. `?status=in`) should only return tasks with exactly that status.
+### 1. Title
+Status query parameter filtering uses `.includes()` instead of strict equality.
 
-### Actual behavior
-Filtering by status uses `.includes()`, allowing partial string matches. For instance, filtering for `in` would return tasks with status `in_progress`.
+### 2. Location & Function
+- **Location:** `src/services/taskService.js`
+- **Function:** `getByStatus(status)`
 
-### Location
-`src/services/taskService.js`
-`getByStatus()`
+### 3. Expected Behavior
+Filtering tasks by status (e.g. `GET /tasks?status=in`) should only return tasks matching exact status strings.
 
-### How it was discovered
-Code inspection during the development of tests.
+### 4. Actual Behavior
+Filtering by status uses JavaScript `.includes()`. For example, `?status=in` matches tasks with status `'in_progress'`.
 
-### Root cause
-The filtering function is implemented as:
+### 5. How the Test Exposed It
+Discovered via code analysis during test design for status query filtering.
+
+### 6. Root Cause
+`getByStatus` implemented filtering as:
 ```javascript
 const getByStatus = (status) => tasks.filter((t) => t.status.includes(status));
 ```
-It uses `.includes()` instead of strict equality `===`.
 
-### Suggested fix
-Change to:
+### 7. Suggested Fix
+Update the filter callback to use strict equality `===`:
 ```javascript
 const getByStatus = (status) => tasks.filter((t) => t.status === status);
 ```
+- **Status:** **Identified & Documented**
 
 ---
 
-## 4. Query parameters conflict ignores pagination
+## 4. Status Filter Ignores Pagination Query Parameters (IDENTIFIED)
 
-### Expected behavior
-If `status`, `page`, and `limit` are provided together, the API should return paginated tasks filtered by that status.
+### 1. Title
+Providing `status` parameter alongside `page` and `limit` skips pagination.
 
-### Actual behavior
-If `status` is provided, the API returns all tasks matching that status and completely ignores `page` and `limit` because of early return in the router.
+### 2. Location & Function
+- **Location:** `src/routes/tasks.js`
+- **Function:** `router.get('/')`
 
-### Location
-`src/routes/tasks.js`
-`router.get('/')`
+### 3. Expected Behavior
+`GET /tasks?status=todo&page=1&limit=10` should return paginated tasks filtered by status.
 
-### How it was discovered
-Code inspection of the `GET /tasks` route handler.
+### 4. Actual Behavior
+The route handler checks `status` first and returns immediately (`return res.json(tasks);`), bypassing the pagination logic.
 
-### Root cause
-The first `if (status)` block returns early, skipping the subsequent pagination block.
+### 5. How the Test Exposed It
+Code inspection of `router.get('/')` in `src/routes/tasks.js`.
 
-### Suggested fix
-Refactor `taskService` to handle combined filtering and pagination, or update the route logic to chain these operations instead of using mutually exclusive `if` statements with early returns.
+### 6. Root Cause
+The route handler uses early returns in separate `if` blocks:
+```javascript
+if (status) {
+  const tasks = taskService.getByStatus(status);
+  return res.json(tasks);
+}
+if (page !== undefined || limit !== undefined) { ... }
+```
+
+### 7. Suggested Fix
+Refactor `taskService` or route query handling to compose filtering and pagination sequentially instead of early returning.
+- **Status:** **Identified & Documented**

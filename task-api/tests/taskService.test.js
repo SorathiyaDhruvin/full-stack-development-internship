@@ -67,13 +67,19 @@ describe('TaskService', () => {
   });
 
   describe('getPaginated()', () => {
-    it('should return correct paginated tasks', () => {
+    it('should return correct paginated tasks for 1-indexed pages', () => {
       for (let i = 1; i <= 15; i++) {
         taskService.create({ title: `T${i}` });
       }
       const page1 = taskService.getPaginated(1, 10);
       expect(page1.length).toBe(10);
-      expect(page1[0].title).toBe('T1'); // this test will fail because of the bug
+      expect(page1[0].title).toBe('T1');
+      expect(page1[9].title).toBe('T10');
+
+      const page2 = taskService.getPaginated(2, 10);
+      expect(page2.length).toBe(5);
+      expect(page2[0].title).toBe('T11');
+      expect(page2[4].title).toBe('T15');
     });
   });
 

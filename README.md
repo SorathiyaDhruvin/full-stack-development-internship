@@ -1,19 +1,68 @@
 # Take-Home Assignment — The Untested API
 
-A 2-day take-home assignment. You'll read unfamiliar code, write tests, track down bugs, and ship a small feature.
+A Node.js + Express REST API for managing tasks with unit tests (Jest) and integration tests (Supertest).
 
-Read **[ASSIGNMENT.md](./ASSIGNMENT.md)** for the full brief before you start.
+Read **[ASSIGNMENT.md](./ASSIGNMENT.md)** for the full original brief.
 
 ---
 
-## A note on AI tools
+## Live API
 
-You're welcome to use AI tools. What we're evaluating is your ability to read and reason about unfamiliar code — so your submission should reflect your own understanding, not just generated output.
+**Base URL:**
+`https://full-stack-development-internship-klyj.onrender.com`
 
-Concretely:
-- For each bug you report: include where in the code it lives and why it happens
-- For the feature you implement: briefly explain the design decisions you made
-- If something surprised you or you had to make a tradeoff, say so
+### Endpoints
+
+| Method   | Path                      | Description                                                  |
+|----------|---------------------------|--------------------------------------------------------------|
+| `GET`    | `/tasks`                  | List all tasks. Supports `?status=`, `?page=`, `?limit=`    |
+| `GET`    | `/tasks?status=todo`      | Filter tasks by status (`todo`, `in_progress`, `done`)       |
+| `GET`    | `/tasks?page=1&limit=10`  | Paginated task retrieval (1-indexed)                         |
+| `POST`   | `/tasks`                  | Create a new task                                            |
+| `PUT`    | `/tasks/:id`              | Full update of a task                                        |
+| `DELETE` | `/tasks/:id`              | Delete a task (returns 204 No Content)                       |
+| `PATCH`  | `/tasks/:id/complete`     | Mark a task as done                                          |
+| `PATCH`  | `/tasks/:id/assign`       | Assign a task to a user                                      |
+| `GET`    | `/tasks/stats`            | Task counts by status + overdue count                        |
+
+### Sample Requests
+
+**Create a task (`POST /tasks`)**
+```bash
+curl -X POST https://full-stack-development-internship-klyj.onrender.com/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Write tests",
+    "priority": "high"
+  }'
+```
+
+**Assign a task (`PATCH /tasks/:id/assign`)**
+```bash
+curl -X PATCH https://full-stack-development-internship-klyj.onrender.com/tasks/<id>/assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "assignee": "Dhruvin"
+  }'
+```
+
+---
+
+## Task Schema
+
+```json
+{
+  "id": "uuid",
+  "title": "string",
+  "description": "string",
+  "status": "todo | in_progress | done",
+  "priority": "low | medium | high",
+  "dueDate": "ISO 8601 or null",
+  "completedAt": "ISO 8601 or null",
+  "createdAt": "ISO 8601",
+  "assignee": "string | null"
+}
+```
 
 ---
 
@@ -27,7 +76,7 @@ npm install
 npm start        # runs on http://localhost:3000
 ```
 
-**Tests:**
+**Run Tests & Coverage:**
 
 ```bash
 npm test           # run test suite
@@ -42,111 +91,93 @@ npm run coverage   # run with coverage report
 task-api/
   src/
     app.js                  # Express app setup
-    routes/tasks.js         # Route handlers
-    services/taskService.js # Business logic + in-memory data store
-    utils/validators.js     # Input validation helpers
-  tests/                    # Your tests go here
+    routes/tasks.js         # Task route handlers
+    services/taskService.js # Business logic + in-memory store
+    utils/validators.js     # Request validation helpers
+  tests/
+    taskService.test.js     # Unit tests for task service
+    tasks.routes.test.js    # Integration tests using Supertest
+    validators.test.js      # Unit tests for request validators
+  BUG_REPORT.md             # Detailed bug analysis report
   package.json
   jest.config.js
-ASSIGNMENT.md               # Full brief — read this first
+ASSIGNMENT.md               # Original project assignment brief
+README.md                   # Project documentation
 ```
 
-> The data store is in-memory. It resets every time the server restarts.
+> Note: The data store is in-memory. It resets every time the server restarts.
 
 ---
 
-## API Reference
+## Testing Summary
 
-| Method   | Path                      | Description                              |
-|----------|---------------------------|------------------------------------------|
-| `GET`    | `/tasks`                  | List all tasks. Supports `?status=`, `?page=`, `?limit=` |
-| `POST`   | `/tasks`                  | Create a new task                        |
-| `PUT`    | `/tasks/:id`              | Full update of a task                    |
-| `DELETE` | `/tasks/:id`              | Delete a task (returns 204)              |
-| `PATCH`  | `/tasks/:id/complete`     | Mark a task as complete                  |
-| `GET`    | `/tasks/stats`            | Counts by status + overdue count         |
-| `PATCH`  | `/tasks/:id/assign`       | **Assign a task to a user** _(to implement)_ |
+Automated tests cover all API endpoints, business logic service functions, and input validation helpers.
 
-### Task shape
-
-```json
-{
-  "id": "uuid",
-  "title": "string",
-  "description": "string",
-  "status": "pending | in-progress | completed",
-  "priority": "low | medium | high",
-  "dueDate": "ISO 8601 or null",
-  "completedAt": "ISO 8601 or null",
-  "createdAt": "ISO 8601"
-}
-```
-
-### Sample requests
-
-**Create a task**
-```bash
-curl -X POST http://localhost:3000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Write tests", "priority": "high"}'
-```
-
-**List tasks with filter**
-```bash
-curl "http://localhost:3000/tasks?status=pending&page=1&limit=10"
-```
-
-**Mark complete**
-```bash
-curl -X PATCH http://localhost:3000/tasks/<id>/complete
-```
+- **Test Suites:** 3 passed, 3 total
+- **Tests:** 61 passed, 61 total
+- **Statement Coverage:** 96.93%
+- **Branch Coverage:** 94.38%
+- **Function Coverage:** 93.33%
+- **Line Coverage:** 96.66%
 
 ---
 
-## What to Submit
+## Feature Implementation: `PATCH /tasks/:id/assign`
 
-See [ASSIGNMENT.md](./ASSIGNMENT.md) for full submission requirements. At minimum, include:
+### Assignment Behavior & Design Decisions
 
-- **Test files** — covering the endpoints and edge cases you identified
-- **Bug report** — what you found, where in the code, and why it's a bug (not just symptoms)
-- **At least one fix** — with a note on your approach
-- **`PATCH /tasks/:id/assign` implementation** — plus a short explanation of any design decisions (validation, edge cases, etc.)
+- **Already-Assigned Protection:** A task that already has an assignee cannot be reassigned through this endpoint. Attempting to assign an already-assigned task returns `409 Conflict`:
+  ```json
+  {
+    "error": "Task already assigned"
+  }
+  ```
+  *Design Rationale:* Prevents accidentally overwriting an active task assignment. Reassignment or unassignment workflows can be explicitly implemented if required in the future.
+
+- **Input Validation Rules (`validateAssignTask`):**
+  - `assignee` is required.
+  - `assignee` must be a string type.
+  - Empty strings (`""`) and whitespace-only strings (`"   "`) are rejected with `400 Bad Request`.
+  - Non-string types (e.g. `123`) are rejected with `400 Bad Request`.
+  - Nonexistent task IDs return `404 Not Found`.
 
 ---
 
-## Submission Documentation
+## Bug Report & Fix Summary
 
-### What I tested
-- **Unit Tests:** Tested `src/services/taskService.js` and `src/utils/validators.js`. For `taskService`, verified state changes, tested both normal flows (task creation, updates, completion) and error states (acting on non-existent IDs). For `validators`, ensured inputs correctly failed and passed the rules.
-- **Integration Tests:** Covered the Express API in `src/routes/tasks.js` using Supertest. Covered all endpoints, validating request validations and correct HTTP response statuses (200, 201, 204, 400, 404, 409).
-- **Edge Cases:** Invalid pagination behavior, empty lists, empty/missing fields on creation and updating, finding and operating on invalid non-existent IDs.
-- **Coverage:** Reached ~96% overall statement coverage, 100% on services and validators.
+### Fixed Bug (Deployed & Verified)
+- **Pagination Offset Bug (`src/services/taskService.js`):**
+  - **Issue:** `getPaginated(1, 10)` calculated `const offset = page * limit;`, which evaluated page 1 offset to `10`, causing page 1 to skip the first 10 items.
+  - **Fix:** Corrected offset formula to `const offset = (page - 1) * limit;` for 1-indexed pagination.
+  - **Verification:** Unit tests, Supertest route tests, and live API manual verification (`GET /tasks?page=1&limit=10` and `GET /tasks?page=2&limit=10`).
 
-### Bugs found
-1. **Pagination offset:** `getPaginated(1, 10)` returned zero tasks for the first page because it used `page * limit` instead of `(page - 1) * limit`.
-2. **Completion overwrites priority:** `completeTask()` hardcoded `priority: 'medium'`, unconditionally changing a task's prior priority.
-3. **Status filtering matches partially:** `getByStatus` used `.includes()`, meaning `status=in` incorrectly matches `in_progress`.
-4. **Ignored pagination with status:** Supplying `status` alongside `page`/`limit` in `GET /tasks` skips pagination due to an early return statement in the route handler.
+### Additional Identified Bugs
+1. **Completion overwrites priority:** `completeTask()` forced `priority: 'medium'` regardless of previous priority.
+2. **Status filtering partial matching:** `getByStatus()` used `.includes()`, allowing partial matches like `status=in` matching `in_progress`.
+3. **Query parameter conflict ignores pagination:** `GET /tasks` checks `status` first and returns early, ignoring `page` and `limit` when `status` is provided.
 
-### Bugs fixed
-I fixed the **Pagination offset bug**, the **Priority overwrite bug**, and the **Status filtering matching bug**.
-- **Pagination offset:** Updated `getPaginated` to calculate `const offset = (page - 1) * limit;` to properly handle 1-indexed pagination.
-- **Priority overwrite:** Removed `priority: 'medium'` from `completeTask` so it only updates the status and doesn't clobber the user's priority.
-- **Status filtering:** Updated `getByStatus` to use strict equality (`t.status === status`) instead of `.includes(status)` to avoid partial matches like 'in' matching 'in_progress'.
+For full bug analysis, root cause details, and suggested fixes, see **[task-api/BUG_REPORT.md](./task-api/BUG_REPORT.md)**.
 
-### New feature
-Implemented `PATCH /tasks/:id/assign`.
-- **Validation Decisions:** Included a new validator `validateAssignTask` which enforces that `assignee` is provided, is a string, and is not solely composed of whitespaces. 
-- **Already-Assigned Behavior:** If an assignee already exists, the service throws a 409 Conflict error, and the route safely returns it. This design prevents accidentally overwriting another user's task. 
+---
 
-### What I would test next
-- Requesting pagination limits that are very high or negative numbers.
-- Submitting malformed JSON to the API endpoints.
-- Simulating concurrent updates (e.g. race conditions during status or assignee changes).
-- Date parsing edge cases (leap years, non-ISO date string corner cases).
+## What I Would Test Next
 
-### Questions before production
-- **Authentication/Authorization:** Should users only be able to assign tasks to registered users or themselves?
-- **Expected Pagination Semantics:** Are negative page numbers allowed? Should there be a maximum `limit` enforcement?
-- **Persistence:** Should we migrate to a persistent data store (PostgreSQL/MongoDB) before deploying?
-- **Audit Logs:** Should task assignments and status updates maintain a historical timeline/audit log?
+- **Pagination Boundary Limits:** Test very large limit values (e.g., `limit=10000`), zero page (`page=0`), or negative page/limit numbers.
+- **Malformed & Invalid JSON Payloads:** Send invalid JSON strings or empty request bodies to verify robust error handling.
+- **Payload Size Restrictions:** Submit oversized request payloads to ensure body parser size limits are enforced.
+- **Date Edge Cases:** Validate date parsing for leap years, non-ISO formats, and complex timezone offsets.
+- **Concurrent Updates & Race Conditions:** Test simultaneous status updates or assignment calls to detect race conditions in memory operations.
+- **Error Resiliency:** Test 500 internal server error fallback paths.
+- **Performance & Load Testing:** Measure API response latency under high throughput.
+
+---
+
+## Questions Before Production
+
+- **Database Persistence:** Should tasks be migrated to a persistent database (e.g., PostgreSQL or MongoDB)?
+- **Authentication & Authorization:** What authentication scheme (e.g., JWT, OAuth2) and role-based access control should be implemented?
+- **Assignee Verification:** Should assignees be validated against a registered user account table/service?
+- **Reassignment Workflow:** Should task reassignment or explicit task unassignment be supported?
+- **Audit Logging:** Should task assignment history and status changes be stored in an audit log table?
+- **Pagination Semantics:** What should be the maximum enforced `limit` for paginated queries?
+- **Rate Limiting:** What rate limiting policies should be configured for live API endpoints?

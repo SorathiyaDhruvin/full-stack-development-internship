@@ -8,6 +8,12 @@ describe('Task API Routes', () => {
   });
 
   describe('GET /tasks', () => {
+    it('should return 200 and an empty list when no tasks exist', async () => {
+      const res = await request(app).get('/tasks');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
     it('should return 200 and all tasks', async () => {
       taskService.create({ title: 'T1' });
       taskService.create({ title: 'T2' });
@@ -27,15 +33,22 @@ describe('Task API Routes', () => {
       expect(res.body[0].title).toBe('T1');
     });
 
-    it('should paginate tasks', async () => {
+    it('should paginate tasks correctly for page 1 and page 2', async () => {
       for (let i = 1; i <= 15; i++) {
         taskService.create({ title: `T${i}` });
       }
 
-      const res = await request(app).get('/tasks?page=1&limit=10');
-      expect(res.status).toBe(200);
-      expect(res.body.length).toBe(10);
-      // Wait to assert title until bug is fixed or check what it currently returns
+      const resPage1 = await request(app).get('/tasks?page=1&limit=10');
+      expect(resPage1.status).toBe(200);
+      expect(resPage1.body.length).toBe(10);
+      expect(resPage1.body[0].title).toBe('T1');
+      expect(resPage1.body[9].title).toBe('T10');
+
+      const resPage2 = await request(app).get('/tasks?page=2&limit=10');
+      expect(resPage2.status).toBe(200);
+      expect(resPage2.body.length).toBe(5);
+      expect(resPage2.body[0].title).toBe('T11');
+      expect(resPage2.body[4].title).toBe('T15');
     });
   });
 
@@ -64,6 +77,16 @@ describe('Task API Routes', () => {
       const res = await request(app).post('/tasks').send({ title: 'T1', status: 'invalid' });
       expect(res.status).toBe(400);
     });
+
+    it('should return 400 for invalid priority', async () => {
+      const res = await request(app).post('/tasks').send({ title: 'T1', priority: 'invalid' });
+      expect(res.status).toBe(400);
+    });
+
+    it('should return 400 for invalid dueDate', async () => {
+      const res = await request(app).post('/tasks').send({ title: 'T1', dueDate: 'invalid-date' });
+      expect(res.status).toBe(400);
+    });
   });
 
   describe('PUT /tasks/:id', () => {
@@ -79,9 +102,21 @@ describe('Task API Routes', () => {
       expect(res.body.title).toBe('Updated');
     });
 
-    it('should return 400 for invalid update data', async () => {
+    it('should return 400 for invalid update status', async () => {
       const task = taskService.create({ title: 'T1' });
       const res = await request(app).put(`/tasks/${task.id}`).send({ status: 'invalid' });
+      expect(res.status).toBe(400);
+    });
+
+    it('should return 400 for invalid update title', async () => {
+      const task = taskService.create({ title: 'T1' });
+      const res = await request(app).put(`/tasks/${task.id}`).send({ title: '   ' });
+      expect(res.status).toBe(400);
+    });
+
+    it('should return 400 for invalid update dueDate', async () => {
+      const task = taskService.create({ title: 'T1' });
+      const res = await request(app).put(`/tasks/${task.id}`).send({ dueDate: 'invalid-date' });
       expect(res.status).toBe(400);
     });
   });
@@ -116,13 +151,22 @@ describe('Task API Routes', () => {
   });
 
   describe('GET /tasks/stats', () => {
-    it('should return 200 and task stats', async () => {
+    it('should return 200 and accurate task stats including overdue count', async () => {
+      taskService.create({ title: 'T1', status: 'todo' });
+      taskService.create({ title: 'T2', status: 'in_progress' });
+      taskService.create({ title: 'T3', status: 'done' });
+      const pastDate = new Date();
+      pastDate.setFullYear(pastDate.getFullYear() - 1);
+      taskService.create({ title: 'T4', status: 'todo', dueDate: pastDate.toISOString() });
+
       const res = await request(app).get('/tasks/stats');
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('todo');
-      expect(res.body).toHaveProperty('in_progress');
-      expect(res.body).toHaveProperty('done');
-      expect(res.body).toHaveProperty('overdue');
+      expect(res.body).toEqual({
+        todo: 2,
+        in_progress: 1,
+        done: 1,
+        overdue: 1
+      });
     });
   });
 
