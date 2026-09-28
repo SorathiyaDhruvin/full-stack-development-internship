@@ -145,18 +145,24 @@ Automated tests cover all API endpoints, business logic service functions, and i
 
 ## Bug Report & Fix Summary
 
-### Fixed Bug (Deployed & Verified)
-- **Pagination Offset Bug (`src/services/taskService.js`):**
-  - **Issue:** `getPaginated(1, 10)` calculated `const offset = page * limit;`, which evaluated page 1 offset to `10`, causing page 1 to skip the first 10 items.
-  - **Fix:** Corrected offset formula to `const offset = (page - 1) * limit;` for 1-indexed pagination.
-  - **Verification:** Unit tests, Supertest route tests, and live API manual verification (`GET /tasks?page=1&limit=10` and `GET /tasks?page=2&limit=10`).
+For full bug analysis, root cause details, code locations, and suggested/implemented fixes, see **[task-api/BUG_REPORT.md](./task-api/BUG_REPORT.md)**.
 
-### Additional Identified Bugs
-1. **Completion overwrites priority:** `completeTask()` forced `priority: 'medium'` regardless of previous priority.
-2. **Status filtering partial matching:** `getByStatus()` used `.includes()`, allowing partial matches like `status=in` matching `in_progress`.
-3. **Query parameter conflict ignores pagination:** `GET /tasks` checks `status` first and returns early, ignoring `page` and `limit` when `status` is provided.
+### Summary Table
 
-For full bug analysis, root cause details, and suggested fixes, see **[task-api/BUG_REPORT.md](./task-api/BUG_REPORT.md)**.
+| # | Bug Title | Location | Status |
+|---|-----------|----------|--------|
+| 1 | Pagination Offset Bug | `src/services/taskService.js` (`getPaginated`) | **Fixed** |
+| 2 | Completion Overwrites Priority | `src/services/taskService.js` (`completeTask`) | **Fixed** |
+| 3 | Status Filtering Partial Matching | `src/services/taskService.js` (`getByStatus`) | **Fixed** |
+| 4 | Pagination Combined with Status Filtering | `src/routes/tasks.js` (`router.get('/')`) | **Identified but not fixed** |
+
+### Bugs Fixed
+1. **Pagination Offset Bug (`src/services/taskService.js`):** Corrected `const offset = page * limit;` to `const offset = (page - 1) * limit;` for 1-indexed page calculations. Verified in unit/integration tests and on the live API deployment.
+2. **Completion Overwrites Priority (`src/services/taskService.js`):** Removed explicit `priority: 'medium'` from `completeTask()` so that `...task` preserves the task's pre-existing priority upon completion. Verified in unit tests.
+3. **Status Filtering Partial Matching (`src/services/taskService.js`):** Updated `getByStatus()` from `.includes(status)` to strict equality `=== status` to prevent partial string match collisions. Verified in unit and route integration tests.
+
+### Bugs Identified But Not Fixed
+1. **Pagination Combined with Status Filtering (`src/routes/tasks.js`):** Supplying `?status=...` alongside `?page=...&limit=...` returns early upon finding `status`, ignoring pagination parameters. This issue remains present in the code and is documented in `BUG_REPORT.md` for future refactoring.
 
 ---
 
